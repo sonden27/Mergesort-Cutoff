@@ -48,11 +48,9 @@ def main():
 
     # Vung toi uu (plateau): cac moc CUTOFF dat >= 97.5% hieu nang cua moc tot nhat
     plateau_cutoffs = sorted(
-        ranking[ranking["gmean_speedup_median"] >= best_gmean * 0.975]["cutoff"]
-        .astype(int)
-        .tolist()
+        int(c) for c in ranking[ranking["gmean_speedup_median"] >= best_gmean * 0.975]["cutoff"]
     )
-    plateau_str = ", ".join(map(str, plateau_cutoffs))
+    plateau_str = ", ".join(str(c) for c in plateau_cutoffs)
 
     r7 = ranking[ranking["cutoff"] == 7].iloc[0]
     r10 = ranking[ranking["cutoff"] == 10].iloc[0]
@@ -101,6 +99,7 @@ def main():
     ]
 
     max_n_medians = {}
+    max_n_best_c = {}
     for dist in ["ascending", "descending", "duplicates", "random"]:
         dist_sub = summary[(summary["distribution"] == dist) & (summary["N"] == max_n)]
         vals = {
@@ -108,6 +107,7 @@ def main():
             for c in comp_cutoffs
         }
         max_n_medians[dist] = vals
+        max_n_best_c[dist] = best_dist_c
         min_shown = min(vals.values())
 
         best_dist_row = dist_sub.loc[dist_sub["median_ms"].idxmin()]
