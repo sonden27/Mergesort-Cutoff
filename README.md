@@ -1,6 +1,6 @@
 # MergeSort CUTOFF — Experimental Benchmark & Analysis (Java)
 
-![Java](https://img.shields.io/badge/Java-17.0.18-ED8B00) ![JVM](https://img.shields.io/badge/JVM--Xms2g%20-Xmx4g-444444) ![Python](https://img.shields.io/badge/Python-3.13.7-3776AB) ![Pandas](https://img.shields.io/badge/Pandas-3.0.5-150458) ![NumPy](https://img.shields.io/badge/NumPy-2.5.1-013243) ![Matplotlib](https://img.shields.io/badge/Matplotlib-3.11.1-11557C)
+![Java](https://img.shields.io/static/v1?label=Java&message=17.0.18&color=ED8B00) ![JVM](https://img.shields.io/static/v1?label=JVM&message=-Xms2g+-Xmx4g&color=444444) ![Python](https://img.shields.io/static/v1?label=Python&message=3.13.7&color=3776AB) ![Pandas](https://img.shields.io/static/v1?label=Pandas&message=3.0.5&color=150458) ![NumPy](https://img.shields.io/static/v1?label=NumPy&message=2.5.1&color=013243) ![Matplotlib](https://img.shields.io/static/v1?label=Matplotlib&message=3.11.1&color=11557C)
 
 - **Họ và tên:** Bùi Ngọc Sơn
 - **Mã sinh viên:** 25021967
@@ -46,28 +46,31 @@ Nghiên cứu thực nghiệm tìm giá trị `CUTOFF` tối ưu (ngưỡng chuy
 | 9 | 6 | 1.1283x | 1.1473x | 0.8882 | 13.08% |
 | 10 | 4 | 1.1235x | 1.1279x | 0.8918 | 11.12% |
 | 11 | **7** | **1.1228x** | 1.1582x | 0.8945 | 9.60% |
+| ... | ... | ... | ... | ... | ... |
 | 16 | 0 (Baseline) | 1.0000x | 1.0000x | 1.0000 | 11.72% |
+
+*(Bảng rút gọn hiển thị Top 10, mốc giáo trình `7`, `10` và Baseline `0`; xem đầy đủ 17 mốc tại `results/overall_ranking.csv`.)*
 
 ### So sánh tại kích thước lớn nhất ($N = 500,000$)
 
-| Dạng dữ liệu | CUTOFF = 0 (ms) | CUTOFF = 7 (ms) | CUTOFF = 10 (ms) | CUTOFF = 14 (ms) | Speedup (14 vs 0) |
+| Dạng dữ liệu | CUTOFF = 0 (ms) | CUTOFF = 7 (ms) | CUTOFF = 10 (ms) | CUTOFF = 14 (ms) | Tối ưu riêng tại N lớn nhất |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| `ascending` | 51.253 | 45.099 | 43.486 | **43.343** | **1.182x** |
-| `descending` | 49.264 | 46.969 | 47.674 | **47.447** | **1.038x** |
-| `duplicates` | 60.810 | 55.496 | 55.023 | **55.078** | **1.104x** |
-| `random` | 114.968 | 106.104 | 105.258 | **107.145** | **1.073x** |
+| `ascending` | 51.253 | 45.099 | 43.486 | **43.343** | `C=64` (36.770 ms, **1.394x**) |
+| `descending` | 49.264 | **46.969** | 47.674 | 47.447 | `C=6` (46.225 ms, **1.066x**) |
+| `duplicates` | 60.810 | 55.496 | **55.023** | 55.078 | `C=24` (53.544 ms, **1.136x**) |
+| `random` | 114.968 | 106.104 | **105.258** | 107.145 | `C=24` (103.502 ms, **1.111x**) |
 
-*(Giá trị trong bảng là thời gian trung vị `median_ms` qua 15 lần đo.)*
+*(Giá trị trong bảng là thời gian trung vị `median_ms` qua 15 lần đo; ô **in đậm** là mốc nhanh nhất trong nhóm cột so sánh trên từng dòng.)*
 
 ### Kết luận chính
-- **CUTOFF tối ưu:** Trên cấu hình máy thử nghiệm với JVM hiện tại, `CUTOFF = 14` đạt hiệu năng tổng hợp cao nhất (**1.189x**, CV trung bình 15.53%), tiếp sát theo sau là `CUTOFF = 16` (**1.174x**, CV 14.52%).
-- **So sánh mốc giáo trình 7 và 10:** Tổng thể `CUTOFF = 10` (1.169x) chênh lệch **+4.12%** so với `CUTOFF = 7` (1.123x). Cả hai mốc đều cải thiện rõ rệt so với MergeSort thuần túy (`CUTOFF = 0`).
+- **CUTOFF tối ưu và vùng tối ưu (*optimal plateau*):** Trên toàn bộ 16 bộ dữ liệu, `CUTOFF = 14` đạt điểm tổng hợp cao nhất (**1.189x**), kế tiếp là `CUTOFF = 16` (**1.174x**). Xét riêng các mảng kích thước lớn ($N \ge 100,000$), mốc dẫn đầu là `CUTOFF = 20` (**1.128x**, CV trung bình chỉ **6.40%**). Nhìn chung, vùng tối ưu ổn định (chênh lệch dưới 2.5% so với đỉnh) nằm tại các mốc **`{10, 12, 14, 16}`**.
+- **So sánh mốc giáo trình 7 và 10:** Tổng thể `CUTOFF = 10` (1.169x) chênh lệch **+4.12%** so với `CUTOFF = 7` (1.123x). Tại $N = 500,000$ trên dữ liệu `random` tiêu chuẩn, `CUTOFF = 10` (105.258 ms) nhanh hơn cả `CUTOFF = 7` (106.104 ms) và bám rất sát hiệu năng tối ưu.
 
 ---
 
 ## 3. Biểu đồ trực quan
 
-### Biểu đồ 1: Thời gian chạy trung bình và trung vị theo CUTOFF ($N = 500,000$)
+### Biểu đồ 1: Thời gian chạy trung bình, trung vị và IQR theo CUTOFF ($N = 500,000$)
 ![Biểu đồ 1](results/charts/chart1_time_vs_cutoff.png)
 
 ### Biểu đồ 2: So sánh các mốc CUTOFF chính ($N = 500,000$)

@@ -27,8 +27,38 @@ def main():
     raw_df = pd.read_csv("results/raw_results.csv")
     summary = pd.read_csv("results/summary_stats.csv")
     ranking = pd.read_csv("results/overall_ranking.csv")
-    large_ranking = pd.read_csv("results/large_n_ranking.csv")
-    cv_by_size = pd.read_csv("results/cv_by_size.csv")
+    def gmean(series):
+        return float(np.exp(np.mean(np.log(series))))
+
+    large_sub = summary[summary["N"] >= 100_000]
+    if large_sub.empty:
+        large_sub = summary[summary["N"] == summary["N"].max()]
+    large_ranking = (
+        large_sub.groupby("cutoff")
+        .agg(
+            gmean_speedup_median=("speedup_median", gmean),
+            gmean_speedup_mean=("speedup_mean", gmean),
+            avg_cv_pct=("cv_pct", "mean"),
+        )
+        .reset_index()
+        .sort_values("gmean_speedup_median", ascending=False)
+        .reset_index(drop=True)
+    )
+    large_ranking.insert(0, "rank", range(1, len(large_ranking) + 1))
+    large_ranking.to_csv("results/large_n_ranking.csv", index=False)
+
+    cv_by_size = (
+        summary.groupby("N")
+        .agg(
+            mean_cv_pct=("cv_pct", "mean"),
+            median_cv_pct=("cv_pct", "median"),
+            max_cv_pct=("cv_pct", "max"),
+            median_time_ms=("median_ms", "median"),
+        )
+        .reset_index()
+        .sort_values("N")
+    )
+    cv_by_size.to_csv("results/cv_by_size.csv", index=False)
 
     total_runs = len(raw_df)
     n_trials = int(raw_df["trial"].nunique())
@@ -107,13 +137,13 @@ def main():
             for c in comp_cutoffs
         }
         max_n_medians[dist] = vals
-        max_n_best_c[dist] = best_dist_c
         min_shown = min(vals.values())
 
         best_dist_row = dist_sub.loc[dist_sub["median_ms"].idxmin()]
         best_dist_c = int(best_dist_row["cutoff"])
         best_dist_t = float(best_dist_row["median_ms"])
         best_dist_sp = vals[0] / best_dist_t
+        max_n_best_c[dist] = best_dist_c
 
         cells = [f"`{dist}`"]
         for c in comp_cutoffs:
@@ -349,11 +379,11 @@ Hệ số góc ước lượng trên đồ thị Log-Log ($\\log_2 T(N)$ theo $\
 
 1. **Hiệu quả của CUTOFF, đường cong chữ U và vùng tối ưu (*optimal plateau*):**
    - Ở các phân bố `random`, `descending` và `duplicates`, thời gian chạy giảm rõ khi tăng `CUTOFF` rời khỏi `0` nhờ triệt tiêu hàng trăm nghìn lời gọi đệ quy và thao tác sao chép mảng phụ `aux[]` kích thước nhỏ. Khi `CUTOFF` tiến về `40..64`, chi phí $O(k^2)$ của Insertion Sort (đặc biệt trên `Comparable[]` với các phép `exch()` đổi chỗ từng cặp) tăng mạnh, kéo hiệu năng đi xuống.
-   - Thực tế không chỉ có một điểm duy nhất vượt trội tuyệt đối mà hình thành một **vùng tối ưu tương đối phẳng** tại **`{{{plateau_str}}}`** (chênh lệch dưới 2.5% so với đỉnh `{best_c}`). Điều này lý giải vì sao tại $N = {max_n:,}$, mốc `10` nhỉnh hơn `14` trên `random` và `duplicates`, trong khi `14` thắng trên `ascending` và dẫn đầu khi tính trung bình nhân trên toàn bộ {n_datasets} bộ dữ liệu.
+   - Thực tế không chỉ có một điểm duy nhất vượt trội tuyệt đối mà hình thành một **vùng tối ưu tương đối phẳng** tại **`{{{plateau_str}}}`** (chênh lệch dưới 2.5% so với đỉnh `{best_c}`). Trong vùng này, mốc tối ưu riêng dịch chuyển tùy theo đặc trưng dữ liệu: tại $N = {max_n:,}$, `descending` đạt đỉnh ở mốc nhỏ `C={max_n_best_c['descending']}`, `random` đạt đỉnh tại `C={max_n_best_c['random']}`, `duplicates` tại `C={max_n_best_c['duplicates']}`, còn `ascending` tiếp tục nhanh hơn đến `C={max_n_best_c['ascending']}`.
 
 2. **Ảnh hưởng của đặc trưng dữ liệu đầu vào và kiến trúc CPU (*Branch Prediction*):**
    - `ascending`: Insertion Sort chỉ tốn đúng 1 phép so sánh cho mỗi phần tử ($O(k)$) và tránh được toàn bộ chi phí sao chép `aux[]`, nên `CUTOFF` càng lớn càng nhanh.
-   - `descending`: Insertion Sort rơi vào trường hợp xấu nhất ($\\sim k^2/2$ phép so sánh và hoán đổi), khiến điểm tối ưu bị kéo về ngưỡng nhỏ (quanh `7`) và thời gian tăng mạnh khi `CUTOFF` lớn.
+   - `descending`: Insertion Sort rơi vào trường hợp xấu nhất ($\\sim k^2/2$ phép so sánh và hoán đổi), khiến điểm tối ưu bị kéo về ngưỡng nhỏ (tại $N = {max_n:,}$ đạt đỉnh ở `C={max_n_best_c['descending']}`) và thời gian tăng mạnh khi `CUTOFF` lớn.
    - `duplicates` và `random`: phản ánh rõ điểm cân bằng thực tế giữa giảm chi phí đệ quy và chi phí sắp xếp chèn cục bộ trong cache CPU.
    - **Hiện tượng kiến trúc CPU:** Tại $N = {max_n:,}$ (`CUTOFF = 0`), dữ liệu `random` ({rand_base_t:.3f} ms) chạy chậm gấp **{ratio_rand_vs_asc:.2f}x** so với `ascending` ({asc_base_t:.3f} ms) và **{ratio_rand_vs_desc:.2f}x** so với `descending` ({desc_base_t:.3f} ms), dù MergeSort thuần túy có độ phức tạp $\\Theta(N \\log N)$ cho mọi đầu vào. Nguyên nhân là bộ dự đoán nhánh (**CPU Branch Predictor**) trong vòng lặp `merge`: với mảng tăng/giảm dần, điều kiện `less(aux[j], aux[i])` luôn theo một hướng cố định nên hầu như không đoán sai nhánh, còn với `random` xác suất đoán sai lên tới ~50%, gây xả đường ống lệnh (*pipeline flush*) liên tục.
 
@@ -370,7 +400,7 @@ Hệ số góc ước lượng trên đồ thị Log-Log ($\\log_2 T(N)$ theo $\
 
 Trên cấu hình thử nghiệm ({m['cpu']}, `{m['javac']}`), cải tiến **CUTOFF** cho cài đặt MergeSort chuẩn bài giảng giúp đạt mức tăng tốc tổng thể **{best_gmean:.3f}x** tại **`CUTOFF = {best_c}`** trên toàn bộ {n_datasets} bộ dữ liệu (kế tiếp là `CUTOFF = {second_c}` đạt **{second_row['gmean_speedup_median']:.3f}x**), và dẫn đầu tại **`CUTOFF = {large_best_c}`** (**{large_best['gmean_speedup_median']:.3f}x**) khi xét riêng quy mô mảng lớn ($N \\ge 100,000$).
 
-Hai mốc giáo trình `7` và `10` đều mang lại cải thiện rõ rệt so với bản gốc, trong đó `CUTOFF = 10` chênh lệch **{diff_10_vs_7:+.2f}%** so với `CUTOFF = 7` và nằm gọn trong **vùng tối ưu `{{{plateau_str}}}`** (đặc biệt rất mạnh trên dữ liệu `random` kích thước lớn). Với cấu hình máy hiện tại, khuyến nghị chọn **`CUTOFF = {best_c}`** (hoặc bất kỳ giá trị nào trong vùng `10–16`, trong đó `10` là lựa chọn an toàn nhất nếu dữ liệu có khả năng xuất hiện trường hợp giảm dần `descending`).
+Hai mốc giáo trình `7` và `10` đều mang lại cải thiện rõ rệt so với bản gốc, trong đó `CUTOFF = 10` chênh lệch **{diff_10_vs_7:+.2f}%** so với `CUTOFF = 7` và nằm gọn trong **vùng tối ưu `{{{plateau_str}}}`** (đặc biệt rất mạnh trên dữ liệu `random` kích thước lớn). Với cấu hình máy hiện tại, khuyến nghị chọn **`CUTOFF = {best_c}`** (hoặc bất kỳ giá trị nào trong vùng `{min(plateau_cutoffs)}–{max(plateau_cutoffs)}`, trong đó `10` là lựa chọn an toàn nhất nếu dữ liệu có khả năng xuất hiện trường hợp giảm dần `descending`).
 """
 
     with open("report/BaoCao_MergeSort_Cutoff.md", "w", encoding="utf-8") as f:

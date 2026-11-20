@@ -24,7 +24,7 @@ Do cả `Insertion.sort` và thao tác `merge` (ưu tiên lấy phần tử nử
 - **`CUTOFF = 7`:** Mốc kinh điển dùng trong bộ sắp xếp hệ thống Java 6 (`Arrays.sort` cho kiểu đối tượng).
 - **`CUTOFF ≈ 10`:** Mốc khuyến nghị trong phiên bản bài giảng mới cho cả Mergesort và Quicksort (bên cạnh minh họa với `cutoff = 12`).
 
-Bởi hiệu năng thực tế chịu tác động mạnh từ kiến trúc bộ nhớ đệm (CPU cache) và trình biên dịch JIT trên từng máy, thí nghiệm này tiến hành đo đạc thực nghiệm để tìm giá trị `CUTOFF` tối ưu cho cấu hình máy cá nhân.
+Bởi hiệu năng thực tế chịu tác động mạnh từ kiến trúc bộ nhớ đệm (CPU cache), bộ dự đoán nhánh (*branch predictor*) và trình biên dịch JIT trên từng máy, thí nghiệm này tiến hành đo đạc thực nghiệm để tìm giá trị `CUTOFF` tối ưu cho cấu hình máy cá nhân.
 
 ---
 
@@ -50,7 +50,7 @@ Bởi hiệu năng thực tế chịu tác động mạnh từ kiến trúc bộ
 - **Chống nhiễu đo đạc:**
   1. Thực hiện **JVM Warm-up toàn cục** (mảng 50,000 phần tử qua 17 mức) kết hợp 2 vòng warm-up riêng cho từng tập dữ liệu nhằm kích hoạt tối ưu hóa JIT (C2) trước khi ghi nhận số liệu.
   2. Cấp phát bộ nhớ Heap cố định (`-Xms2g -Xmx4g`) để hạn chế Garbage Collector tạm dừng giữa phép đo.
-  3. Lặp $T = 15$ lần cho mỗi cấu hình (tổng $4 \times 4 \times 17 \times 15 = 4{,}080$ lượt đo); xáo trộn ngẫu nhiên thứ tự 17 mức `CUTOFF` ở từng vòng để tránh thiên lệch nhiệt độ CPU.
+  3. Lặp $T = 15$ lần cho mỗi cấu hình (tổng $4 \times 4 \times 17 \times 15 = 4,080$ lượt đo); xáo trộn ngẫu nhiên thứ tự 17 mức `CUTOFF` ở từng vòng để tránh thiên lệch nhiệt độ CPU.
   4. Sao chép mảng đầu vào bằng `System.arraycopy` ngoài vùng đo `System.nanoTime()` và xác minh `Merge.isSorted()` sau từng lượt.
   5. Tổng hợp bằng **Trung vị (`median_ms`)**, **Trung bình nhân tốc độ (`Geometric Mean Speedup`)** và **Hệ số biến thiên (`CV%`)** để giảm tác động của các outlier từ hệ điều hành hoặc GC.
 
@@ -73,18 +73,30 @@ Bởi hiệu năng thực tế chịu tác động mạnh từ kiến trúc bộ
 | 9 | 6 | 1.1283x | 1.1473x | 0.8882 | 13.08% |
 | 10 | 4 | 1.1235x | 1.1279x | 0.8918 | 11.12% |
 | 11 | **7** | **1.1228x** | 1.1582x | 0.8945 | 9.60% |
+| ... | ... | ... | ... | ... | ... |
 | 16 | 0 (Baseline) | 1.0000x | 1.0000x | 1.0000 | 11.72% |
+
+*(Bảng rút gọn hiển thị Top 10, mốc giáo trình `7`, `10` và Baseline `0`; xem đầy đủ tại `results/overall_ranking.csv` và xếp hạng riêng cho $N \ge 100,000$ tại `results/large_n_ranking.csv`.)*
 
 ### 3.2. Chi tiết thời gian trung vị tại $N = 500,000$
 
-| Dạng dữ liệu | CUTOFF = 0 (ms) | CUTOFF = 7 (ms) | CUTOFF = 10 (ms) | CUTOFF = 14 (ms) | Speedup (14 vs 0) |
+| Dạng dữ liệu | CUTOFF = 0 (ms) | CUTOFF = 7 (ms) | CUTOFF = 10 (ms) | CUTOFF = 14 (ms) | Tối ưu riêng tại N lớn nhất |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| `ascending` | 51.253 | 45.099 | 43.486 | **43.343** | **1.182x** |
-| `descending` | 49.264 | 46.969 | 47.674 | **47.447** | **1.038x** |
-| `duplicates` | 60.810 | 55.496 | 55.023 | **55.078** | **1.104x** |
-| `random` | 114.968 | 106.104 | 105.258 | **107.145** | **1.073x** |
+| `ascending` | 51.253 | 45.099 | 43.486 | **43.343** | `C=64` (36.770 ms, **1.394x**) |
+| `descending` | 49.264 | **46.969** | 47.674 | 47.447 | `C=6` (46.225 ms, **1.066x**) |
+| `duplicates` | 60.810 | 55.496 | **55.023** | 55.078 | `C=24` (53.544 ms, **1.136x**) |
+| `random` | 114.968 | 106.104 | **105.258** | 107.145 | `C=24` (103.502 ms, **1.111x**) |
 
-### 3.3. Kiểm chứng bậc tăng trưởng theo kích thước mảng $N$ (Dữ liệu `random`)
+### 3.3. Độ ổn định phép đo (`CV%`) theo từng kích thước mảng $N$
+
+| Kích thước $N$ | Thời gian trung vị chung (ms) | CV trung bình (%) | CV trung vị (%) | CV lớn nhất (%) |
+| :---: | :---: | :---: | :---: | :---: |
+| 1,000 | 0.0389 | 20.16% | 21.91% | 62.22% |
+| 10,000 | 0.6584 | 6.99% | 2.59% | 28.43% |
+| 100,000 | 8.0889 | 15.60% | 4.00% | 320.56% |
+| 500,000 | 54.3177 | 8.48% | 3.43% | 70.25% |
+
+### 3.4. Kiểm chứng bậc tăng trưởng theo kích thước mảng $N$ (Dữ liệu `random`)
 
 | Kích thước $N$ | Median CUTOFF = 0 (ms) | Median CUTOFF = 14 (ms) | Speedup |
 | :---: | :---: | :---: | :---: |
@@ -95,9 +107,9 @@ Bởi hiệu năng thực tế chịu tác động mạnh từ kiến trúc bộ
 
 Hệ số góc ước lượng trên đồ thị Log-Log ($\log_2 T(N)$ theo $\log_2 N$):
 - **CUTOFF = 0 (Baseline):** $\text{slope} \approx 1.222$
-- **CUTOFF = 14 (Tối ưu):** $\text{slope} \approx 1.265$
+- **CUTOFF = 14 (Tối ưu tổng thể):** $\text{slope} \approx 1.265$
 
-### 3.4. Hệ thống biểu đồ trực quan
+### 3.5. Hệ thống biểu đồ trực quan
 
 ![Biểu đồ 1](../results/charts/chart1_time_vs_cutoff.png)
 ![Biểu đồ 2](../results/charts/chart2_compare_key_cutoffs.png)
@@ -111,16 +123,25 @@ Hệ số góc ước lượng trên đồ thị Log-Log ($\log_2 T(N)$ theo $\l
 
 1. **Hiệu quả của CUTOFF, đường cong chữ U và vùng tối ưu (*optimal plateau*):**
    - Ở các phân bố `random`, `descending` và `duplicates`, thời gian chạy giảm rõ khi tăng `CUTOFF` rời khỏi `0` nhờ triệt tiêu hàng trăm nghìn lời gọi đệ quy và thao tác sao chép mảng phụ `aux[]` kích thước nhỏ. Khi `CUTOFF` tiến về `40..64`, chi phí $O(k^2)$ của Insertion Sort (đặc biệt trên `Comparable[]` với các phép `exch()` đổi chỗ từng cặp) tăng mạnh, kéo hiệu năng đi xuống.
-   - Thực tế không chỉ có một điểm duy nhất vượt trội tuyệt đối mà hình thành một **vùng tối ưu tương đối phẳng** tại **`{{{plateau_str}}}`** (chênh lệch dưới 2.5% so với đỉnh `{best_c}`). Trong vùng này, mốc tối ưu riêng dịch chuyển tùy theo đặc trưng dữ liệu: tại $N = {max_n:,}$, `descending` đạt đỉnh ở mốc nhỏ `C={max_n_best_c['descending']}`, `random` đạt đỉnh tại `C={max_n_best_c['random']}`, `duplicates` tại `C={max_n_best_c['duplicates']}`, còn `ascending` tiếp tục nhanh hơn đến `C={max_n_best_c['ascending']}`.
+   - Thực tế không chỉ có một điểm duy nhất vượt trội tuyệt đối mà hình thành một **vùng tối ưu tương đối phẳng** tại **`{10, 12, 14, 16}`** (chênh lệch dưới 2.5% so với đỉnh `14`). Trong vùng này, mốc tối ưu riêng dịch chuyển tùy theo đặc trưng dữ liệu: tại $N = 500,000$, `descending` đạt đỉnh ở mốc nhỏ `C=6`, `random` đạt đỉnh tại `C=24`, `duplicates` tại `C=24`, còn `ascending` tiếp tục nhanh hơn đến `C=64`.
 
 2. **Ảnh hưởng của đặc trưng dữ liệu đầu vào và kiến trúc CPU (*Branch Prediction*):**
    - `ascending`: Insertion Sort chỉ tốn đúng 1 phép so sánh cho mỗi phần tử ($O(k)$) và tránh được toàn bộ chi phí sao chép `aux[]`, nên `CUTOFF` càng lớn càng nhanh.
-   - `descending`: Insertion Sort rơi vào trường hợp xấu nhất ($\\sim k^2/2$ phép so sánh và hoán đổi), khiến điểm tối ưu bị kéo về ngưỡng nhỏ (tại $N = {max_n:,}$ đạt đỉnh ở `C={max_n_best_c['descending']}`) và thời gian tăng mạnh khi `CUTOFF` lớn.
-3. **Độ ổn định trên JVM (Boxplot & CV%):** Biểu đồ 5 cho thấy phần lớn lượt đo tập trung sát trung vị, trong khi một vài điểm ngoại lai phía trên đến từ tác vụ nền hoặc GC. Việc đánh giá bằng `median_ms` kết hợp `Geometric Mean Speedup` giúp xếp hạng khách quan hơn so với trung bình cộng đơn thuần.
-4. **Tác động tới bậc tăng trưởng tiệm cận:** Hệ số góc trên đồ thị Log-Log (Biểu đồ 4) giữa `CUTOFF = 0` (1.222) và `CUTOFF = 14` (1.265) gần như tương đương nhau. Cải tiến `CUTOFF` giúp **giảm hằng số nhân** (dịch đường cong xuống dưới) nhưng giữ nguyên độ phức tạp tiệm cận $\Theta(N \log N)$.
+   - `descending`: Insertion Sort rơi vào trường hợp xấu nhất ($\sim k^2/2$ phép so sánh và hoán đổi), khiến điểm tối ưu bị kéo về ngưỡng nhỏ (tại $N = 500,000$ đạt đỉnh ở `C=6`) và thời gian tăng mạnh khi `CUTOFF` lớn.
+   - `duplicates` và `random`: phản ánh rõ điểm cân bằng thực tế giữa giảm chi phí đệ quy và chi phí sắp xếp chèn cục bộ trong cache CPU.
+   - **Hiện tượng kiến trúc CPU:** Tại $N = 500,000$ (`CUTOFF = 0`), dữ liệu `random` (114.968 ms) chạy chậm gấp **2.24x** so với `ascending` (51.253 ms) và **2.33x** so với `descending` (49.264 ms), dù MergeSort thuần túy có độ phức tạp $\Theta(N \log N)$ cho mọi đầu vào. Nguyên nhân là bộ dự đoán nhánh (**CPU Branch Predictor**) trong vòng lặp `merge`: với mảng tăng/giảm dần, điều kiện `less(aux[j], aux[i])` luôn theo một hướng cố định nên hầu như không đoán sai nhánh, còn với `random` xác suất đoán sai lên tới ~50%, gây xả đường ống lệnh (*pipeline flush*) liên tục.
+
+3. **Độ ổn định trên JVM (Bảng 3.3 & Biểu đồ 5):**
+   - Bảng 3.3 cho thấy hệ số biến thiên tổng hợp bị kéo lên chủ yếu bởi mảng rất nhỏ $N = 1,000$ (CV trung bình **20.16%** do thời gian chạy chỉ khoảng 0.0389 ms, rất nhạy với nhiễu định thời hệ điều hành). Khi tăng lên $N = 500,000$, phép đo ổn định hơn rõ rệt (CV trung vị chỉ **3.43%**, trung bình **8.48%**).
+   - Biểu đồ 5 (Boxplot) xác nhận phần lớn lượt đo tập trung sát trung vị, trong khi một vài điểm ngoại lai phía trên đến từ tác vụ nền hoặc GC. Việc đánh giá bằng `median_ms` kết hợp `Geometric Mean Speedup` giúp xếp hạng khách quan hơn so với trung bình cộng đơn thuần.
+
+4. **Tác động tới bậc tăng trưởng tiệm cận:**
+   - Hệ số góc trên đồ thị Log-Log (Biểu đồ 4) giữa `CUTOFF = 0` (1.222) và `CUTOFF = 14` (1.265) gần như tương đương nhau. Cải tiến `CUTOFF` giúp **giảm hằng số nhân** (dịch đường cong xuống dưới) nhưng giữ nguyên độ phức tạp tiệm cận $\Theta(N \log N)$.
 
 ---
 
 ## 5. Kết luận
 
-Trên cấu hình thử nghiệm (AMD Ryzen 7 H 255 w/ Radeon 780M Graphics (8 cores, 16 logical processors, 3801 MHz), `javac 17.0.18`), cải tiến **CUTOFF** cho cài đặt MergeSort chuẩn bài giảng giúp đạt mức tăng tốc tổng thể **1.189x** tại **`CUTOFF = 14`** (kế tiếp là `CUTOFF = 16` đạt **1.174x**). Hai mốc giáo trình `7` và `10` đều mang lại cải thiện rõ rệt so với bản gốc, trong đó `CUTOFF = 10` chênh lệch +4.12% so với `CUTOFF = 7`.
+Trên cấu hình thử nghiệm (AMD Ryzen 7 H 255 w/ Radeon 780M Graphics (8 cores, 16 logical processors, 3801 MHz), `javac 17.0.18`), cải tiến **CUTOFF** cho cài đặt MergeSort chuẩn bài giảng giúp đạt mức tăng tốc tổng thể **1.189x** tại **`CUTOFF = 14`** trên toàn bộ 16 bộ dữ liệu (kế tiếp là `CUTOFF = 16` đạt **1.174x**), và dẫn đầu tại **`CUTOFF = 20`** (**1.128x**) khi xét riêng quy mô mảng lớn ($N \ge 100,000$).
+
+Hai mốc giáo trình `7` và `10` đều mang lại cải thiện rõ rệt so với bản gốc, trong đó `CUTOFF = 10` chênh lệch **+4.12%** so với `CUTOFF = 7` và nằm gọn trong **vùng tối ưu `{10, 12, 14, 16}`** (đặc biệt rất mạnh trên dữ liệu `random` kích thước lớn). Với cấu hình máy hiện tại, khuyến nghị chọn **`CUTOFF = 14`** (hoặc bất kỳ giá trị nào trong vùng `10–16`, trong đó `10` là lựa chọn an toàn nhất nếu dữ liệu có khả năng xuất hiện trường hợp giảm dần `descending`).
