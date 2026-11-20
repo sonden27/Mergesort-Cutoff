@@ -1,0 +1,7 @@
+OS: Microsoft Windows 11 Home 10.0.26300 (64-bit)
+CPU: AMD Ryzen 7 H 255 w/ Radeon 780M Graphics (8 cores, 16 logical processors, 3801 MHz)
+RAM: 15.31 GB
+Java Runtime: openjdk version "17.0.18" 2026-01-20 | OpenJDK Runtime Environment Temurin-17.0.18+8 (build 17.0.18+8)
+Java Compiler: javac 17.0.18
+JVM Flags: -Xms2g -Xmx4g
+Python: 3.13.7 (pandas 3.0.5, numpy 2.5.1, matplotlib 3.11.1)
